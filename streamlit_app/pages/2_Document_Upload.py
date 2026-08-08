@@ -1,21 +1,22 @@
 """
-pages/2_Document_Upload.py — Document Upload & Pipeline Trigger Page (Phase 3 & 7 Integration)
+pages/2_Document_Upload.py — Document Ingestion, Summarization & Document-Scoped Chat
 
 Overview:
-Interface for uploading raw PDF documents (KYC forms, bank statements, compliance policies)
-into the automated document ingestion pipeline (`FINTECH_COPILOT.DOCS.DOC_STAGE`).
+End-to-end document management page for uploading raw PDF documents into the automated 
+ingestion pipeline (`FINTECH_COPILOT.DOCS.DOC_STAGE`), viewing extracted field summaries, 
+and conducting interactive follow-up Q&A on specific processed files using Cortex Agent.
 
-Technical Architecture Notes:
-  1. Server-Side Stage Upload: Uses `session.file.put_stream()` with an in-memory `io.BytesIO` 
-     buffer to write uploaded file bytes directly into Snowflake's internal stage `@DOCS.DOC_STAGE` 
-     without needing a local filesystem.
-  2. Directory Refresh: Triggers `ALTER STAGE REFRESH` immediately after write so stage 
-     directory tables recognize the new file without waiting for periodic background tasks.
-  3. On-Demand Pipeline Execution: Provides an "EXECUTE TASK" option to manually fire 
-     `TASK_PARSE_NEW_DOCS`, allowing users to process uploaded files instantly rather than 
-     waiting for the 30-minute scheduled polling cycle.
-  4. Real-Time Status Tracking: Joins stage DIRECTORY metadata with `DOCS.PROCESSED_DOCS` to 
-     display a live processing status table for recent uploads.
+Key Features & Architectural Flow:
+  1. Server-Side Memory Streaming: Writes uploaded PDF bytes directly into `@DOCS.DOC_STAGE` 
+     using `session.file.put_stream()` and `io.BytesIO`, avoiding local filesystem usage.
+  2. Immediate Pipeline Execution: Offers an "EXECUTE TASK" option to manually trigger 
+     `TASK_PARSE_NEW_DOCS` on demand instead of waiting for the 30-minute schedule.
+  3. Real-Time Processing Status: Joins stage DIRECTORY metadata with `DOCS.PROCESSED_DOCS` 
+     to render a live upload and parsing status dashboard.
+  4. Direct Field/Content Summary: Bypasses AI search for file summaries by running direct 
+     relational SQL queries against `DOC_FIELDS` (KYC records) or `DOC_TEXT_REDACTED` (General text).
+  5. Document-Scoped Agent Chat: Integrates `utils.agent_client` to let users ask contextual 
+     follow-up questions specifically prefixed for the chosen document.
 
 Access Control:
 Restricted strictly to roles with `document_upload` permission 
@@ -30,6 +31,7 @@ import streamlit as st
 # Append parent directory to Python path to import root-level utility modules
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from utils.access_control import check_access, get_session, get_current_role
+from utils.agent_client import call_agent, render_blocks
 
 # Configure Streamlit page settings and browser tab metadata
 st.set_page_config(page_title="Document Upload — Compliance Copilot", page_icon="📄", layout="wide")
@@ -47,7 +49,7 @@ STAGE_NAME = "FINTECH_COPILOT.DOCS.DOC_STAGE"
 # Acquire Snowpark session from Streamlit runtime context
 session = get_session()
 
-# Page introduction & pipeline workflow explanation
+# Page workflow overview
 st.write(
     "Upload KYC forms, bank statements, or compliance policy documents. "
     "Files land in `DOCS.DOC_STAGE` and are automatically parsed, extracted, "
@@ -55,7 +57,7 @@ st.write(
     "(the scheduled task interval) or immediately if you trigger it manually below."
 )
 
-# File uploader widget accepting PDF files
+# File uploader widget accepting PDF documents
 uploaded_file = st.file_uploader(
     "Choose a PDF document",
     type=["pdf"],
@@ -63,19 +65,19 @@ uploaded_file = st.file_uploader(
 )
 
 # ------------------------------------------------------------------------
-# Document Upload & Manual Task Execution Logic
-# Handles memory streaming into stage and optional task trigger
+# 1. Document Upload & Pipeline Execution Trigger
+# Streams bytes into stage memory and offers an immediate task execution button
 # ------------------------------------------------------------------------
 if uploaded_file is not None:
     st.write(f"Selected: `{uploaded_file.name}` ({uploaded_file.size:,} bytes)")
 
-    # Button to execute Stream Put into Stage
+    # Button to stream uploaded file into internal stage
     if st.button("Upload to stage", type="primary"):
         try:
-            # 1. Read uploaded file bytes into an in-memory Byte stream
+            # Read file bytes into memory buffer
             file_bytes = uploaded_file.getvalue()
             
-            # 2. Upload byte stream directly into Snowflake internal stage
+            # Stream bytes into Snowflake internal stage
             session.file.put_stream(
                 io.BytesIO(file_bytes),
                 f"@{STAGE_NAME}/{uploaded_file.name}",
@@ -84,7 +86,7 @@ if uploaded_file is not None:
             )
             st.success(f"✅ Uploaded `{uploaded_file.name}` to the stage.")
 
-            # 3. Refresh stage directory metadata immediately for live tracking
+            # Refresh stage directory metadata immediately for UI tracking
             session.sql(f"ALTER STAGE {STAGE_NAME} REFRESH").collect()
 
         except Exception as e:
@@ -92,7 +94,7 @@ if uploaded_file is not None:
 
     st.divider()
     
-    # Optional button to bypass 30-minute task schedule and trigger root task immediately
+    # Button to manually execute root automation task and bypass 30-minute schedule
     if st.button("⚡ Process now (skip the 30-minute wait)"):
         with st.spinner("Triggering pipeline..."):
             try:
@@ -111,12 +113,12 @@ if uploaded_file is not None:
 st.divider()
 
 # ------------------------------------------------------------------------
-# Live Status Dashboard
-# Displays stage DIRECTORY files joined with processing status tracker
+# 2. Upload & Processing Status Dashboard
+# Displays stage DIRECTORY contents joined with processing status tracker
 # ------------------------------------------------------------------------
 st.subheader("Upload & processing status")
 
-# Manual refresh button to trigger page rerun and re-fetch status table
+# Manual refresh button to reload processing status table
 if st.button("🔄 Refresh status"):
     st.rerun()
 
@@ -126,7 +128,7 @@ def load_status():
     """
     Queries stage directory metadata left-joined with DOCS.PROCESSED_DOCS
     to display processing states for the 25 most recent files.
-    Cached for 30 seconds (TTL = 30s) for responsive UI rendering.
+    Cached for 30 seconds (TTL = 30s).
     """
     query = f"""
         SELECT
@@ -143,14 +145,107 @@ def load_status():
     return session.sql(query).to_pandas()
 
 
-# Safely load and display status DataFrame with fallback formatting
+# Safely execute status query with error fallback
 try:
     status_df = load_status()
     if not status_df.empty:
-        # Format unprocessed status nulls with an informative status label
         status_df["PIPELINE_STATUS"] = status_df["PIPELINE_STATUS"].fillna("⏳ Not yet processed")
         st.dataframe(status_df, use_container_width=True)
     else:
         st.caption("No documents in the stage yet.")
+        status_df = None
 except Exception as e:
     st.error(f"Could not load status: {e}")
+    status_df = None
+
+# ------------------------------------------------------------------------
+# 3. Direct Document Summary & Contextual Follow-Up Chat
+# Direct relational query fetches extracted KYC fields or redacted text.
+# The Cortex Agent handles contextual follow-up questions.
+# ------------------------------------------------------------------------
+st.divider()
+st.subheader("Document summary & follow-up questions")
+
+if status_df is not None and not status_df.empty:
+    # Filter list to show only files that have completed processing
+    processed_files = status_df[status_df["PIPELINE_STATUS"] != "⏳ Not yet processed"]["RELATIVE_PATH"].tolist()
+
+    if not processed_files:
+        st.caption("No documents have finished processing yet — check back after running the pipeline.")
+    else:
+        # Dropdown to select a processed file for summary and Q&A
+        selected_file = st.selectbox("Select a processed document to summarize", processed_files)
+
+        if selected_file:
+            # 3A. Query extracted KYC fields from DOC_FIELDS
+            summary_query = """
+                SELECT full_name, date_of_birth, ssn, address, email, phone, id_type, id_number
+                FROM FINTECH_COPILOT.DOCS.DOC_FIELDS
+                WHERE relative_path = ?
+            """
+            fields_result = session.sql(summary_query, params=[selected_file]).to_pandas()
+
+            if not fields_result.empty:
+                st.write("**Extracted KYC fields:**")
+                st.dataframe(fields_result, use_container_width=True)
+            else:
+                # 3B. Fallback: If not a KYC doc, fetch redacted text from DOC_TEXT_REDACTED
+                text_query = """
+                    SELECT redacted_text
+                    FROM FINTECH_COPILOT.DOCS.DOC_TEXT_REDACTED
+                    WHERE relative_path = ?
+                """
+                text_result = session.sql(text_query, params=[selected_file]).to_pandas()
+                if not text_result.empty:
+                    st.write("**Document content (redacted):**")
+                    st.text(text_result.iloc[0]["REDACTED_TEXT"])
+                else:
+                    st.caption("No extracted fields or redacted text found for this document yet.")
+
+            # ------------------------------------------------------------
+            # 3C. Document-Scoped Interactive Chat
+            # Uses document-specific session state key (`doc_chat_<filename>`)
+            # ------------------------------------------------------------
+            st.write("**Ask a follow-up question:**")
+
+            doc_chat_key = f"doc_chat_{selected_file}"
+            if doc_chat_key not in st.session_state:
+                st.session_state[doc_chat_key] = {"messages": [], "thread_id": None}
+
+            # Render existing chat history for the selected document
+            for msg in st.session_state[doc_chat_key]["messages"]:
+                with st.chat_message(msg["role"]):
+                    if msg["role"] == "assistant" and isinstance(msg["content"], list):
+                        render_blocks(msg["content"])
+                    else:
+                        st.markdown(msg["content"])
+
+            # Input widget for document follow-up questions
+            followup = st.chat_input(
+                f"Ask about {selected_file}...", key=f"input_{selected_file}"
+            )
+            if followup:
+                # 1. Save user prompt into document chat state
+                st.session_state[doc_chat_key]["messages"].append(
+                    {"role": "user", "content": followup}
+                )
+                with st.chat_message("user"):
+                    st.markdown(followup)
+
+                # 2. Invoke Cortex Agent with document-scoped prompt string
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        blocks, new_thread_id = call_agent(
+                            session,
+                            f"Regarding the document {selected_file}: {followup}",
+                            st.session_state[doc_chat_key]["thread_id"],
+                        )
+                        st.session_state[doc_chat_key]["thread_id"] = new_thread_id
+                    render_blocks(blocks)
+
+                # 3. Save assistant response blocks into document chat state
+                st.session_state[doc_chat_key]["messages"].append(
+                    {"role": "assistant", "content": blocks}
+                )
+else:
+    st.caption("Upload a document above to see its summary here once processed.")
