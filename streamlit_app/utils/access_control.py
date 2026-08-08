@@ -13,7 +13,6 @@ ROLE_ACCESS = {
     "COMPLIANCE_INVESTIGATOR_ROLE": {
         "chat": True,
         "document_upload": True,
-        "investigator_workspace": True,
         "customer_360": True,
         "cost_dashboard": True,
         "eval_dashboard": True,
@@ -21,7 +20,6 @@ ROLE_ACCESS = {
     "SUPPORT_AGENT_ROLE": {
         "chat": True,
         "document_upload": False,
-        "investigator_workspace": False,
         "customer_360": False,
         "cost_dashboard": False,
         "eval_dashboard": False,
@@ -29,7 +27,6 @@ ROLE_ACCESS = {
     "CORTEX_ADMIN_ROLE": {
         "chat": True,
         "document_upload": True,
-        "investigator_workspace": True,
         "customer_360": True,
         "cost_dashboard": True,
         "eval_dashboard": True,
