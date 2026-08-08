@@ -1,0 +1,6 @@
+name: compliance_copilot_env
+channels:
+  - snowflake
+dependencies:
+  - streamlit
+  - pandas
