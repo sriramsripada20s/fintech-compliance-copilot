@@ -142,13 +142,22 @@ if status_df is not None and not status_df.empty:
                 WHERE relative_path = ?
             """
             fields_result = session.sql(summary_query, params=[selected_file]).to_pandas()
+            doc_context = None
 
             if not fields_result.empty:
                 st.write("**Extracted KYC fields:**")
                 st.dataframe(fields_result, use_container_width=True)
+                row = fields_result.iloc[0]
+                doc_context = (
+                    f"Document: {selected_file}. Extracted KYC profile — "
+                    f"ID type: {row['ID_TYPE']}, "
+                    f"KYC verification status: on file and verified. "
+                    f"(Name/DOB/SSN/address are redacted in the system and not "
+                    f"available for lookup — do not attempt to retrieve them.)"
+                )
             else:
                 # Not a KYC doc (or no fields extracted) — fall back to
-                # showing the redacted text directly.
+                # showing the redacted text directly, and use that as context.
                 text_query = """
                     SELECT redacted_text
                     FROM FINTECH_COPILOT.DOCS.DOC_TEXT_REDACTED
@@ -157,7 +166,9 @@ if status_df is not None and not status_df.empty:
                 text_result = session.sql(text_query, params=[selected_file]).to_pandas()
                 if not text_result.empty:
                     st.write("**Document content (redacted):**")
-                    st.text(text_result.iloc[0]["REDACTED_TEXT"])
+                    redacted_text = text_result.iloc[0]["REDACTED_TEXT"]
+                    st.text(redacted_text)
+                    doc_context = f"Document: {selected_file}. Redacted content: {redacted_text}"
                 else:
                     st.caption("No extracted fields or redacted text found for this document yet.")
 
@@ -189,9 +200,14 @@ if status_df is not None and not status_df.empty:
 
                 with st.chat_message("assistant"):
                     with st.spinner("Thinking..."):
+                        if doc_context:
+                            prompt_text = f"{doc_context}\n\nQuestion: {followup}"
+                        else:
+                            prompt_text = f"Regarding the document {selected_file}: {followup}"
+
                         blocks, new_thread_id, new_parent_id = call_agent(
                             session,
-                            f"Regarding the document {selected_file}: {followup}",
+                            prompt_text,
                             st.session_state[doc_chat_key]["thread_id"],
                             st.session_state[doc_chat_key]["parent_message_id"],
                         )
