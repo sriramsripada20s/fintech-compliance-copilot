@@ -60,7 +60,7 @@ st.markdown("### Available pages")
 page_descriptions = {
     "chat": ("💬 Chat", "Ask questions — routed to structured analytics or document search automatically."),
     "document_upload": ("📄 Document Upload", "Upload KYC forms, statements, and policy documents for processing."),
-    "customer_360": ("👤 Customer 360", "Full customer profile — transactions, disputes, fraud alerts, interaction history."),
+    "customer_360": ("👤 Customer 360", "Full customer profile — transactions, disputes, fraud alerts, interaction history. Unifies structured + unstructured data for a single customer."),
     "cost_dashboard": ("💰 Cost Dashboard", "Cortex AI credit usage and spend tracking."),
     "eval_dashboard": ("📊 Eval Dashboard", "Agent evaluation scores and quality metrics over time."),
 }
