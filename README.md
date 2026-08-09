@@ -241,10 +241,35 @@ $$;
 ```
 
 <img width="1355" height="905" alt="compliance_agent" src="https://github.com/user-attachments/assets/337eadb9-1c48-4687-a51d-d028a0aa7f52" />
- 
-**Evaluation results (v3 → v4):** Answer Correctness 0.97 · Logical Consistency 0.97 · Tool Execution Accuracy 0.93 · Tool Selection Accuracy 0.63 → 0.65 (a documented open item; root cause partially isolated, flagged for continued investigation rather than presented as resolved).
+
 
 > 📸 **<img width="1745" height="603" alt="agent_eval" src="https://github.com/user-attachments/assets/f18133f1-dbcb-4ac5-ae17-3a0877485849" />**
+
+---
+
+### Key Evaluation Insight: Answer Correctness Masking a Routing Weakness
+
+| Metric | Score | Operational Meaning |
+| :--- | :---: | :--- |
+| **Answer Correctness** | **0.97** | Final response accuracy against ground truth |
+| **Logical Consistency** | **0.97** | Reasoning coherence across multi-step plans |
+| **Tool Execution Accuracy** | **0.93** | Query syntax & execution accuracy once chosen |
+| **Tool Selection Accuracy** | **0.65** | Correct tool selection (Analyst vs. Search) |
+
+### Key Finding: Answer Correctness Can Mask a Routing Weakness
+ 
+Reading all four metrics together — rather than any single score in isolation — reveals a pattern that a headline "97% accurate" number would completely hide:
+ 
+- **Execution is excellent once a tool is picked** (0.93) — the agent writes valid SQL and retrieves the right document chunks almost every time.
+- **Selecting the correct tool in the first place is the weak point** (0.65) — roughly 1 in 3 questions saw the agent reach for the wrong tool, or an unintended combination.
+- **The answer still comes out right most of the time anyway** (0.97) — because the underlying model is capable enough to often produce a correct-sounding response even when it was routed imperfectly.
+
+**In plain terms:** if you only measured "did the AI give the right answer," this system would look nearly perfect. Digging one layer deeper showed it was sometimes *getting lucky* — reaching a correct answer despite querying the wrong system, not because it queried the right one. In a compliance context, that distinction matters: a routing mistake that happens to produce a plausible answer today isn't guaranteed to do so on a harder question tomorrow.
+
+**What could improve this, in simple terms — worth exploring later:** 
+
+* **Expand Agent Sample Questions:** Add more question-to-tool example pairings (`sample_questions`) directly in the agent's configuration. This directly trains the agent on tool *selection*—the primary weak spot—rather than SQL generation.
+* **Perform Error-by-Error Question Analysis:** Inspect the specific evaluation questions the agent got wrong one by one, rather than guessing at prompt fixes. *(Note: Adding Verified Queries to the semantic view improves SQL syntax accuracy once Analyst is chosen, but does not fix the initial routing decision).*
  
 ---
  
