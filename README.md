@@ -19,9 +19,10 @@
 | **Deployment & Continuous Integration** | Native Snowflake Git Integration (GitHub Integration, Pull-Based Auto-Sync) |
 | **Governance & Observability** | Snowflake RBAC, Resource Monitors, Native Email Alerting Integrations |
 | **Implementation Languages** | SQL, Python (Snowpark DataFrames, Streamlit) |
- 
-> 📸 **Insert:** architecture diagram / tech stack graphic
- 
+
+
+   **<img width="686" height="782" alt="image" src="https://github.com/user-attachments/assets/132f3e64-9e1b-43ae-afc1-ececd1c54f4b" />**
+
 ---
  
 ## Executive Summary & Business Problem
@@ -58,9 +59,7 @@ Complemented by 10 synthetic compliance documents: 5 KYC identification forms, 3
  
 **Schema architecture:**
 `RAW` (landed data) → `STAGING` (dbt views, 1:1 cleaned) → `INTERMEDIATE` (joined models) → `MARTS` (fact/dimension tables, AI-enriched) → `DOCS` (document stage, parsed text, RBAC-tagged chunks) → `AI` (Cortex Search Service, Cortex Agent) → `APP` (Streamlit application, dbt project object).
- 
-> 📸 **Insert:** Snowsight object explorer showing the full schema tree
- 
+
 ---
  
 ## Data Governance & Security
@@ -69,7 +68,7 @@ Complemented by 10 synthetic compliance documents: 5 KYC identification forms, 3
 - **Access control enforced at the data layer:** Cortex Search filters retrieval results by an `allowed_roles` array attribute at query time; Cortex Analyst access is independently gated via the `CORTEX_ANALYST_USER` database role grant — security that persists regardless of which client or interface issues the query
 - **PII minimization by design:** `AI_REDACT` strips personally identifiable information from document text *before* it is chunked or indexed — raw, unmasked PII exists in exactly one location, the structured `DOC_FIELDS` extraction table, itself governed by the same RBAC model
 - **Cost governance:** a Resource Monitor enforces a warehouse-level credit quota with tiered notification thresholds; native email alerting surfaces task failures without requiring an external monitoring service
-> 📸 **Insert:** RBAC proof-of-concept — `SUPPORT_AGENT_ROLE` search results alongside `COMPLIANCE_INVESTIGATOR_ROLE` search results for the identical query
+**Insert:** RBAC proof-of-concept — `SUPPORT_AGENT_ROLE` search results alongside `COMPLIANCE_INVESTIGATOR_ROLE` search results for the identical query
  
 ---
  
@@ -103,7 +102,10 @@ CREATE ROLE SUPPORT_AGENT_ROLE;
             values: ['LOW', 'MEDIUM', 'HIGH']
 ```
  
-> <img width="1753" height="822" alt="image" src="https://github.com/user-attachments/assets/3a2e5350-b2c9-4aa3-a5f1-a92c033c3e77" />
+**<img width="1753" height="822" alt="image" src="https://github.com/user-attachments/assets/3a2e5350-b2c9-4aa3-a5f1-a92c033c3e77" />**
+
+**<img width="1412" height="737" alt="image" src="https://github.com/user-attachments/assets/da0e4b60-29f1-49f7-851c-c8988ced3b4b" />**
+
 
 ---
  
@@ -127,8 +129,9 @@ select
 from int_support_tickets_redacted;
 ```
  
-> 📸 **FCT_SUPPORT_TICKETS` query result showing category, sentiment, and redacted text together**
-> <img width="1720" height="557" alt="image" src="https://github.com/user-attachments/assets/17472671-e013-4e75-a568-d758795667b0" />
+**FCT_SUPPORT_TICKETS` query result showing category, sentiment, and redacted text together**
+
+**<img width="1720" height="557" alt="image" src="https://github.com/user-attachments/assets/17472671-e013-4e75-a568-d758795667b0" />**
  
 ---
  
@@ -160,8 +163,8 @@ CREATE TASK TASK_PARSE_NEW_DOCS
 AS ...
 ```
  
-> 📸 **TASK_HISTORY()` output confirming all five tasks succeeded in correct dependency order**
-> <img width="1316" height="662" alt="image" src="https://github.com/user-attachments/assets/9829fa92-1cdb-420b-bfc0-4e68a077199c" />
+**TASK_HISTORY()` output confirming all five tasks succeeded in correct dependency order**
+<img width="1316" height="662" alt="image" src="https://github.com/user-attachments/assets/9829fa92-1cdb-420b-bfc0-4e68a077199c" />
 
 ---
  
@@ -188,8 +191,7 @@ SELECT SNOWFLAKE.CORTEX.SEARCH_PREVIEW(
     '{"query": "KYC requirements", "filter": {"@contains": {"allowed_roles": "SUPPORT_AGENT_ROLE"}}}'
 );
 ```
- <img width="1742" height="660" alt="image" src="https://github.com/user-attachments/assets/7746caeb-b68e-46d4-8c5e-e1b0615aa03b" />
-
+ **<img width="1742" height="660" alt="image" src="https://github.com/user-attachments/assets/7746caeb-b68e-46d4-8c5e-e1b0615aa03b" />**
 ---
  
 ## Phase 5 — Cortex Analyst
