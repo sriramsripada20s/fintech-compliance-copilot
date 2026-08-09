@@ -72,7 +72,7 @@ Complemented by 10 synthetic compliance documents: 5 KYC identification forms, 3
  
 ---
  
-## Phase 1 — Foundation
+## Phase 1 — Foundational Layer - Warehouses, dbt Layers - Staging, Intermediate, Mart
  
 Established the medallion schema architecture, a right-sized auto-suspending warehouse, the RBAC role skeleton, synthetic seed data, and dbt staging models with comprehensive test coverage.
  
