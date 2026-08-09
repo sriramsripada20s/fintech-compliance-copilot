@@ -1,7 +1,8 @@
 # Fintech Customer Intelligence & Compliance Copilot
  
 > A production-grade Snowflake GenAI + dbt project unifying structured transactional data and unstructured compliance documents behind a single RBAC-governed, AI-powered interface.
- 
+
+https://github.com/user-attachments/assets/2c383f6e-d687-42b2-ae1c-a055f4aa0340
 ---
  
 ## Technical Architecture Overview
